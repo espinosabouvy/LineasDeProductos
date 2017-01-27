@@ -6,7 +6,7 @@ library(ggplot2)
 library(plotly)
 library(cluster)
 
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
      
      datasetInput <- reactive({
           reporte <- reporte.final()
@@ -19,7 +19,7 @@ shinyServer(function(input, output) {
           
           filename = function() { paste("Modelos asignados por linea", '.csv', sep='') },
           content = function(file) {
-               write.csv(datasetInput(), file)
+               write.csv(datasetInput(), file, row.names = F)
           }
      )
      
@@ -106,7 +106,7 @@ shinyServer(function(input, output) {
           
      })
      
-     output$desviaciones <- renderTable({
+     output$desviaciones <- DT::renderDataTable({
           reporte <- reporte.final()
           if(is.null(reporte)) {
                return(NULL)
@@ -121,10 +121,11 @@ shinyServer(function(input, output) {
                               "Desviacion" = round(sd(TIEMPO),2),
                               "Minimo" = min(TIEMPO) ,
                               "Maximo" = max(TIEMPO))
+               DT::datatable(desviaciones, options = list(pageLength = 50))
           }
      })
      
-     output$grafico.final <- renderPlot({
+     output$grafico.final <- renderPlotly({
           reporte <- reporte.final()
           if(is.null(reporte)) {
                return(NULL)
@@ -134,13 +135,15 @@ shinyServer(function(input, output) {
                tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(2:fin))
                
                # grafico de desviaciones por puesto
+               ggplotly(
                ggplot(data = tabla.renglon, aes(PUESTO, TIEMPO)) + 
                     geom_boxplot(col = "navy", outlier.colour = "red") + 
                     facet_wrap(~LINEA, scales = "free", ncol = 2) +
-                    xlab("Modelos") +
+                    xlab("Puestos") +
                     ylab("Segundos por par")  +
                     ggtitle("Dispersion de tiempo (segundos) para producir un par")+
                     theme(axis.text=element_text(size=10))
+               )
           }
      })
      
@@ -185,7 +188,19 @@ shinyServer(function(input, output) {
           set.seed(8)
           distancias <- dist(tabla.raw[,-1], method = "euclidian")
           clust <- hclust(distancias)
+          maxx <- ceiling(max(clust$height))
+          updateSliderInput(session, "altura_cluster", max = maxx)
+          updateSliderInput(session, "altura_cluster", value = maxx*0.9)
           return(clust)
+     })
+     
+     free.scale.ini <- reactive({
+          b.scales = "fixed"
+          if (input$same.scale.ini){
+               b.scales = "free"
+          }
+          return(b.scales)
+          
      })
      
      #grafica el dendograma
@@ -225,7 +240,8 @@ shinyServer(function(input, output) {
      })
      
      #GRAFICO INICIAL
-     output$graficoinicial <- renderPlot({
+     output$graficoinicial <- renderPlotly({
+          b.scales <- free.scale.ini()
           
           #leer tabla
           tabla.raw <- leer.archivo()
@@ -235,9 +251,10 @@ shinyServer(function(input, output) {
           tabla.ren <- gather(tabla.raw, "PUESTO","TIEMPO",-1)
           
           # grafico de desviaciones por puesto
+          ggplotly(
           ggplot(data = tabla.ren, aes(ESTILO, TIEMPO)) + 
                geom_point(col = "navy", alpha = 0.5) + 
-               facet_wrap(~PUESTO, scales = "free")+ 
+               facet_wrap(~PUESTO, scales = b.scales)+ 
                geom_hline(data = tabla.ren%>%
                                group_by(PUESTO)%>%
                                summarise("Promedio" = mean(TIEMPO)),
@@ -246,10 +263,10 @@ shinyServer(function(input, output) {
                xlab("Modelos") +
                ylab("Segundos por par")  +
                ggtitle("Tiempo (segundos) para producir un par")
-          
+          )
      })
      #GRAFICO INICIAL
-     output$boxplotini <- renderPlot({
+     output$boxplotini <- renderPlotly({
           
           #leer tabla
           tabla.raw <- leer.archivo()
@@ -259,12 +276,15 @@ shinyServer(function(input, output) {
           tabla.ren <- gather(tabla.raw, "PUESTO","TIEMPO",-1)
           
           # grafico de desviaciones por puesto
-          ggplot(data = tabla.ren, aes(PUESTO, TIEMPO)) + 
-               geom_boxplot(col = "navy") + 
-               xlab("Modelos") +
-               ylab("Segundos por par")  +
-               ggtitle("Tiempo (segundos) para producir un par")
-          
+          print(
+               ggplotly(
+                    ggplot(data = tabla.ren, aes(PUESTO, TIEMPO)) + 
+                         geom_boxplot(col = "navy") + 
+                         xlab("Modelos") +
+                         ylab("Segundos por par")  +
+                         ggtitle("Tiempo (segundos) para producir un par")
+               )
+          )
      })
      
 })

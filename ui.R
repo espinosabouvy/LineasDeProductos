@@ -8,7 +8,7 @@ shinyUI(fluidPage(
           sidebarPanel(
                h4("Te invitamos a que definas tus lineas de produccion utilizando los datos de tu empresa."),
                h5("El archivo debe tener un formato de columnas como se muestra en la figura.  Tus datos 
-                  pueden tener 3 o más puestos o tipos de operador"),
+                  pueden tener 3 o mas puestos o tipos de operador"),
                img(src= "http://www.magro.com.mx/images/formato.PNG", align = "left",
                    width = 200),
                fileInput("browse", "Selecciona archivo CSV",
@@ -25,15 +25,16 @@ shinyUI(fluidPage(
                #    la suscripción en Apps/Comprar aplicaciones o enviarnos un correo en la cuenta 
                #    luis@magro.com.mx para ayudarte"),
                h5("Si tienes alguna duda de como funciona esta app, puedes enviarnos un correo a 
-                  luis@magro.com.mx para ayudarte o puedes ver el artículo que explica su función y 
+                  luis@magro.com.mx para ayudarte o puedes ver el articulo que explica su funcion y 
                   funcionamiento en http://www.magro.com.mx/index.php/news/7-lineasprodcalzado"),
                tabsetPanel(
                     tabPanel("Datos leidos",DT::dataTableOutput("tabla_completa")),
                     tabPanel("Estadistica", 
                              tableOutput("tablainicial"),
-                             plotOutput("boxplotini"),
-                             plotOutput("graficoinicial")),
-                    tabPanel("Líneas de producción", 
+                             plotlyOutput("boxplotini"),
+                             checkboxInput("same.scale.ini", "Usar escala independiente en cada grafico", FALSE),
+                             plotlyOutput("graficoinicial", height = "800px")),
+                    tabPanel("Lineas de produccion", 
                              column(6, 
                                     sliderInput("altura_cluster", "Indice de desviacion",
                                          min=2, max= 3000,
@@ -47,8 +48,8 @@ shinyUI(fluidPage(
                     tabPanel("Analisis Final y Medicion de mejora", 
                              tableOutput("mejora"),
                              tableOutput("total.fam"),
-                             plotOutput("grafico.final"),
-                             tableOutput("desviaciones"))
+                             plotlyOutput("grafico.final", height = "1000px"),
+                             DT::dataTableOutput("desviaciones", width = 200))
                )
           )
      )

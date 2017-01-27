@@ -1,0 +1,33 @@
+---
+title: "Catalogo de estilos por familia"
+author: "Luis Espinosa Bouvy"
+date: "8 de noviembre de 2016"
+output: html_document
+---
+<style type="text/css">
+.table {
+
+    width: 60%;
+
+}
+</style>
+
+```{r Imprimir tabla, echo=FALSE}
+
+suppressPackageStartupMessages(require(dplyr))
+suppressPackageStartupMessages(require(knitr))
+suppressPackageStartupMessages(require(ggplot2))
+
+
+     #demanda ponderada
+     demanda.raw <- read.csv("Modelos asignados por linea.csv")
+
+     #familia asignada, es familia K o familia H
+     dat.dem <- demanda.raw[,c(1,ncol(demanda.raw))]
+
+     #en kable
+     dat.dem$PHOTO <- paste0("![](c:/photos/E",dat.dem[,1],".jpg)")
+     
+     kable(dat.dem%>%arrange(LINEA, desc(ESTILO)))
+```
+
