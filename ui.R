@@ -1,5 +1,6 @@
 
 library(shiny)
+library(plotly)
 
 shinyUI(fluidPage(
      
@@ -42,14 +43,29 @@ shinyUI(fluidPage(
                              column(6,
                                     p("Lineas de produccion a crear: "),
                                     verbatimTextOutput("lineas")),
-                             plotOutput("dendograma")),
+                             plotOutput("dendograma", height = "600px")),
                     tabPanel("Modelos asignados", DT::dataTableOutput("tabla_asignacion",
                                                                       width = 400)),
                     tabPanel("Analisis Final y Medicion de mejora", 
                              tableOutput("mejora"),
                              tableOutput("total.fam"),
-                             plotlyOutput("grafico.final", height = "1000px"),
-                             DT::dataTableOutput("desviaciones", width = 200))
+                             plotlyOutput("grafico.final", height = "1500px"),
+                             uiOutput("seleccion_linea"),
+                             checkboxInput("same.scale.fin", "Usar escala independiente en cada grafico", FALSE),
+                             plotlyOutput("plot.por.linea", height = "600px"),
+                             DT::dataTableOutput("desviaciones", width = 200)),
+                    tabPanel("Personal Requerido",
+                             column(4,sliderInput("horas.trabajo", "Horas trabajadas por dia",
+                                         min = 1, max = 12, step = 0.5, value = 9.5)),
+                             column(4,sliderInput("eficiencia", "Eficiencia de balanceo",
+                                         min=10, max = 130, step = 5, value = 85)),
+                             column(4,sliderInput("pares.hora","Pares a producir por dia",
+                                         min=100, max = 10000, step = 50, value = 4000)),
+                             column(4,tableOutput("Totales")),
+                             column(4, p("Total personas requeridas"),
+                                    verbatimTextOutput("grantotal")),
+                             DT::dataTableOutput("Porlinea",width = 400)
+                             )
                )
           )
      )

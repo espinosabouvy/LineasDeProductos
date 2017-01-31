@@ -6,6 +6,7 @@ library(ggplot2)
 library(plotly)
 library(cluster)
 
+
 shinyServer(function(input, output, session) {
      
      datasetInput <- reactive({
@@ -24,12 +25,7 @@ shinyServer(function(input, output, session) {
      )
      
      leer.archivo <- reactive({
-          # input$file1 will be NULL initially. After the user selects
-          # and uploads a file, it will be a data frame with 'name',
-          # 'size', 'type', and 'datapath' columns. The 'datapath'
-          # column will contain the local filenames where the data can
-          # be found.
-          
+
           
           inFile <- NULL
           inFile <- input$browse          
@@ -46,6 +42,10 @@ shinyServer(function(input, output, session) {
           #convertir NAS en cero
           datos[is.na(datos)]<-0
           names(datos)[1] <- "ESTILO"
+          #estilo como factor
+          datos[,1] <- as.factor(datos[,1])
+          #nas a cero
+          datos[is.na(datos)]<-0
           
           #limitar cantidad de modelos
           #datos<- datos[1:20,]
@@ -61,6 +61,44 @@ shinyServer(function(input, output, session) {
           DT::datatable(reporte, options = list(pageLength = 25))
      })
      
+     # Drop-down de linea a filtrar
+     output$seleccion_linea <- renderUI({
+          num.fam <- reporte.final()
+          if(is.null(num.fam)) return(NULL)
+          l.linea <- unique(num.fam$LINEA)%>%sort()
+          selectInput("dataset", "Filtrar por linea de produccion", as.list(l.linea))
+     })
+     
+     free.scale.fin <- reactive({
+          b.scales = "fixed"
+          if (input$same.scale.fin){
+               b.scales = "free"
+          }
+          return(b.scales)
+          
+     })
+     
+     output$plot.por.linea <- renderPlotly({
+          reporte <- reporte.final()
+          if(is.null(reporte)) return(NULL)
+          b.scales <- free.scale.fin()
+          
+          linea <- input$dataset
+          cols.usar <- c(2:(ncol(reporte)-1))
+          for.plot <- reporte%>%filter(LINEA == linea)%>%
+               gather("PUESTO","TIEMPO",cols.usar)
+
+          ggplotly(
+          ggplot(for.plot, aes(ESTILO,TIEMPO)) +
+               geom_point() +
+               facet_wrap(~PUESTO, scales = b.scales) +
+               geom_hline(data = for.plot%>%
+                               group_by(PUESTO)%>%
+                               summarise("Promedio" = mean(TIEMPO)),
+                          aes(yintercept = Promedio), col = "red", lwd = 1)
+          )
+     })
+     
      #ANALISIS FINAL
      output$total.fam <- renderTable({
           reporte <- reporte.final()
@@ -73,7 +111,7 @@ shinyServer(function(input, output, session) {
           }
      })
      
-     #tabla outliers
+     #tabla outliers (pendiente)
      output$outliers <- renderTable({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -125,6 +163,60 @@ shinyServer(function(input, output, session) {
           }
      })
      
+     #personal por linea
+     output$Porlinea <- DT::renderDataTable({
+          temp <- reporte.final()
+          if(is.null(temp)) return(NULL)
+          fin <- dim(temp)[2]-1
+          efic <- input$eficiencia/100
+          hrs <- input$horas.trabajo
+          familias <- max(temp$LINEA)
+          prs <- input$pares.hora/familias
+          
+          tabla.renglon <- gather(temp, "PUESTO","TIEMPO",c(2:fin))%>%
+               group_by(LINEA, PUESTO)%>%
+               summarise("TIEMPO.PROMEDIO" = round(mean(TIEMPO),2))%>%
+               mutate("PERSONAS" = ceiling(TIEMPO.PROMEDIO*prs/(efic*hrs*3600)))
+          DT::datatable(tabla.renglon, options = list(pageLength = 50))
+          
+     })
+     
+     #personal total por puesto
+     output$Totales <- renderTable({
+          temp <- reporte.final()
+          if(is.null(temp)) return(NULL)
+          fin <- dim(temp)[2]-1
+          efic <- input$eficiencia/100
+          hrs <- input$horas.trabajo
+          familias <- max(temp$LINEA)
+          prs <- input$pares.hora/familias
+          
+          tabla.totales <- gather(temp, "PUESTO","TIEMPO",c(2:fin))%>%
+               group_by(LINEA, PUESTO)%>%
+               summarise("TIEMPO" = round(mean(TIEMPO),2))%>%
+               mutate("PERSONAS" = ceiling(TIEMPO*prs/(efic*hrs*3600)))%>%
+               summarise("PERSONAS" = ceiling(sum(PERSONAS)))
+          
+     })
+     
+     #gran total
+     output$grantotal <- renderPrint({
+          temp <- reporte.final()
+          if(is.null(temp)) return(NULL)
+          fin <- dim(temp)[2]-1
+          efic <- input$eficiencia/100
+          hrs <- input$horas.trabajo
+          familias <- max(temp$LINEA)
+          prs <- input$pares.hora/familias
+          
+          tabla.totales <- gather(temp, "PUESTO","TIEMPO",c(2:fin))%>%
+               group_by(LINEA, PUESTO)%>%
+               summarise("TIEMPO" = round(mean(TIEMPO),2))%>%
+               mutate("PERSONAS" = ceiling(TIEMPO*prs/(efic*hrs*3600)))%>%
+               summarise("PERSONAS" = ceiling(sum(PERSONAS)))
+          cat(sum(tabla.totales[,2]))
+     })
+     
      output$grafico.final <- renderPlotly({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -136,18 +228,20 @@ shinyServer(function(input, output, session) {
                
                # grafico de desviaciones por puesto
                ggplotly(
-               ggplot(data = tabla.renglon, aes(PUESTO, TIEMPO)) + 
-                    geom_boxplot(col = "navy", outlier.colour = "red") + 
-                    facet_wrap(~LINEA, scales = "free", ncol = 2) +
-                    xlab("Puestos") +
-                    ylab("Segundos por par")  +
-                    ggtitle("Dispersion de tiempo (segundos) para producir un par")+
-                    theme(axis.text=element_text(size=10))
+                    ggplot(data = tabla.renglon, aes(ESTILO, TIEMPO, colour = factor(LINEA))) + 
+                         geom_point() + 
+                         facet_grid(PUESTO~., as.table = F, scales = "free") +
+                         xlab("Estilos") +
+                         ylab("Segundos por par")  +
+                         #ggtitle("Dispersion de tiempo (segundos) para producir un par")+
+                         theme(axis.text=element_text(size=8))
                )
-          }
+          } 
+          
+          
      })
      
-     
+
      reporte.final <- reactive({
           
           #HASTA QUE NO SE SELECCIONE UN ARCHIVO
@@ -162,7 +256,8 @@ shinyServer(function(input, output, session) {
           gr <- tabla.raw[c(2:dim(tabla.raw)[2])]
           k <- kmeans(gr, centers = nolineas ,nstart = 10, iter.max = 100)
           agrupacion.final <- cbind(tabla.raw, "LINEA" = k$cluster)
-          reporte <- agrupacion.final%>%select(LINEA, ESTILO)%>%
+          reporte <- agrupacion.final%>%
+               select(LINEA, ESTILO)%>%
                arrange(LINEA)
           
           #agregar cluster a tabla por renglon
@@ -205,10 +300,13 @@ shinyServer(function(input, output, session) {
      
      #grafica el dendograma
      output$dendograma <- renderPlot({
+          tabla.raw <- leer.archivo()
+          if(is.null(tabla.raw)) return(NULL)
           arbol <- dendograma()
           if(is.null(arbol)) return(NULL)
-          g <- plot(arbol, axes = T, main = "Cluster de agrupamiento", 
-                    xlab = "Modelos", ylab = "Indice de desviaci?n")
+          
+          g <- plot(arbol, labels = tabla.raw[,1], axes = T, main = "Cluster de agrupamiento", 
+                    xlab = "Modelos", ylab = "Indice de desviacion")
           return(g + abline(h = input$altura_cluster, col="red"))
      })
      
@@ -254,7 +352,7 @@ shinyServer(function(input, output, session) {
           ggplotly(
           ggplot(data = tabla.ren, aes(ESTILO, TIEMPO)) + 
                geom_point(col = "navy", alpha = 0.5) + 
-               facet_wrap(~PUESTO, scales = b.scales)+ 
+               facet_grid(PUESTO~., scales = b.scales)+ 
                geom_hline(data = tabla.ren%>%
                                group_by(PUESTO)%>%
                                summarise("Promedio" = mean(TIEMPO)),
