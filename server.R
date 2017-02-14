@@ -78,6 +78,7 @@ shinyServer(function(input, output, session) {
           
      })
      
+     #grafico por linea, dependen del combobox cual mostrar
      output$plot.por.linea <- renderPlotly({
           reporte <- reporte.final()
           if(is.null(reporte)) return(NULL)
@@ -178,6 +179,25 @@ shinyServer(function(input, output, session) {
                summarise("TIEMPO.PROMEDIO" = round(mean(TIEMPO),2))%>%
                mutate("PERSONAS" = ceiling(TIEMPO.PROMEDIO*prs/(efic*hrs*3600)))
           DT::datatable(tabla.renglon, options = list(pageLength = 50))
+          
+     })
+     
+     #personal por puesto
+     output$total_puesto <- renderTable({
+          temp <- reporte.final()
+          if(is.null(temp)) return(NULL)
+          fin <- dim(temp)[2]-1
+          efic <- input$eficiencia/100
+          hrs <- input$horas.trabajo
+          familias <- max(temp$LINEA)
+          prs <- input$pares.hora/familias
+          
+          tabla.puesto <- gather(temp, "PUESTO","TIEMPO",c(2:fin))%>%
+               group_by(LINEA, PUESTO)%>%
+               summarise("TIEMPO.PROMEDIO" = round(mean(TIEMPO),2))%>%
+               mutate("PERSONAS" = ceiling(TIEMPO.PROMEDIO*prs/(efic*hrs*3600)))%>%
+               group_by(PUESTO)%>%
+               summarise("PERSONAS" = sum(PERSONAS))
           
      })
      

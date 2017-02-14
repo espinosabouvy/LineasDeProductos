@@ -61,8 +61,9 @@ shinyUI(fluidPage(
                                          min=10, max = 130, step = 5, value = 85)),
                              column(4,sliderInput("pares.hora","Pares a producir por dia",
                                          min=100, max = 10000, step = 50, value = 4000)),
-                             column(4,tableOutput("Totales")),
-                             column(4, p("Total personas requeridas"),
+                             column(3,tableOutput("Totales")),
+                             column(3,tableOutput("total_puesto")),
+                             column(2, p("Total personas requeridas"),
                                     verbatimTextOutput("grantotal")),
                              DT::dataTableOutput("Porlinea",width = 400)
                              )
