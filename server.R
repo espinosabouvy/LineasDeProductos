@@ -9,24 +9,129 @@ library(cluster)
 
 shinyServer(function(input, output, session) {
      
-     datasetInput <- reactive({
-          reporte <- reporte.final()
-          if(is.null(reporte)) return(NULL)
-          
-          return(reporte)
-     })
+     # #generar
+     # datasetInput <- reactive({
+     #      reporte <- reporte.final()
+     #      if(is.null(reporte)) return(NULL)
+     # 
+     #      return(reporte)
+     # })
      
+     #descargar asignacion de linea (resultado de la app)
      output$download <- downloadHandler(
-          
           filename = function() { paste("Modelos asignados por linea", '.csv', sep='') },
           content = function(file) {
                write.csv(datasetInput(), file, row.names = F)
           }
      )
      
+     #convertir la informacion del sistema de Perugia a formato requerido
+     importar.convertir <- reactive({
+          # 
+          # lectura.inicial <- reactive({
+          #      require(dplyr)
+          #      require(tidyr)
+          #      
+          #      inFile <- NULL
+          #      inFile <- input$browse          
+          #      #inFile$datapath <- "tiempos.csv"
+          #      
+          #      if (is.null(inFile)){
+          #           #sin archivo seleccionado
+          #           return(NULL)
+          #      }
+          #      
+          #      #leer por tipo de archivo
+          #      tiempos.raw <- read.csv(inFile$datapath, 
+          #                              header = TRUE, na.strings = c("NA",""))
+          #      
+          #      #limpiar el formato, actual (LINEA, VCESTIL, PARES, FAMPESP, FAMMONT, DEPTO, FUNCION, TIEMPO,
+          #      #PERSONAS, META)
+          #      deptos.usar <- c("CORTE","CORTE Y PREPARA", "ENSAMBLES", "FAMILIA", "FORRADOS", 
+          #                       "PLANTA", "RAYADO Y RESACA",
+          #                       "SUELA")
+          #      
+          #      tiempos.raw <- tiempos.raw%>%
+          #           select(DEPTO, VCESTIL, FAMPESP, FUNCION, TIEMPO)%>%
+          #           filter(DEPTO %in% deptos.usar)%>%
+          #           filter(TIEMPO > 0)
+          #      
+          #      
+          #      #agrupar pespuntadores y preliminares
+          #      tiempos.raw$FUNCION <- ifelse(grepl("PESPUNTADOR", 
+          #                                          tiempos.raw$FUNCION),"PESPUNTADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-PES", 
+          #                                          tiempos.raw$FUNCION),"PESPUNTADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      #corregir del sistema, mientras, debe desaparecer
+          #      tiempos.raw$FUNCION <- ifelse(grepl("PRECONFORM", 
+          #                                          tiempos.raw$FUNCION),"PRELIMINAR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("PRELIM", 
+          #                                          tiempos.raw$FUNCION),"PRELIMINAR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-PRE", 
+          #                                          tiempos.raw$FUNCION),"PRELIMINAR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("C-PREA", 
+          #                                          tiempos.raw$FUNCION),"PRELIMINAR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-COR", 
+          #                                          tiempos.raw$FUNCION),"CORTADOR PIEL",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CORTADOR FLASH", 
+          #                                          tiempos.raw$FUNCION),"CORTADOR PIEL",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("PRECONF", 
+          #                                          tiempos.raw$FUNCION),"PRECONFORMADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-PREC", 
+          #                                          tiempos.raw$FUNCION),"PRECONFORMADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-DOB", 
+          #                                          tiempos.raw$FUNCION),"DOBLILLADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("CA-REB", 
+          #                                          tiempos.raw$FUNCION),"REBAJADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw$FUNCION <- ifelse(grepl("REBAJADOR PIEL", 
+          #                                          tiempos.raw$FUNCION),"REBAJADOR",
+          #                                    paste(tiempos.raw$FUNCION))
+          #      tiempos.raw[tiempos.raw$FUNCION == "FORRAR" & tiempos.raw$DEPTO == "PLANTA",]$FUNCION <- "RIBETEAR"
+          #      
+          #      #quitar comodines
+          #      tiempos.raw <- tiempos.raw[!grepl("COMODIN+",  tiempos.raw$FUNCION),]
+          #      names(tiempos.raw) <- make.names(names(tiempos.raw))
+          #      tiempos <- tiempos.raw%>%
+          #           select(DEPTO, "ESTILO" = VCESTIL, "LINEA" = FAMPESP, FUNCION, TIEMPO)
+          #      
+          #      #hacer correcciones al archivo y llenar combo para seleccionar depto
+          #      if (is.null(tiempos)){
+          #           #sin archivo seleccionado
+          #           return(NULL)
+          #      }
+          #      
+          #      #llenar combo de departamentos con el archivo preparado
+          #      output$depto.select <- renderUI({
+          #           deptos <- unique(tiempos$DEPTO)
+          #           selectInput("depto.selected", "Selecciona el departamento que quieres analizar", as.list(deptos))
+          #      })
+          #      
+          #      
+          #      #llenar combo de lineas de produccion con el archivo preparado
+          #      output$fams.select <- renderUI({
+          #           fams <- unique(tiempos$LINEA)%>%sort()
+          #           selectInput("fams.selected", "Selecciona las lineas que quieres analizar", as.list(fams), multiple = TRUE)
+          #      })
+          #      
+          #      
+          #      return(tiempos)
+     })
+     
+     #lectura inicial, requiere el formato original (modificando 27/03/2017)
      leer.archivo <- reactive({
 
-          
           inFile <- NULL
           inFile <- input$browse          
           #inFile$datapath <- "tiempos.csv"
@@ -52,8 +157,10 @@ shinyServer(function(input, output, session) {
           
           return(datos)
           
-     })  
-     #TABLA DE ESTILOS ASIGNADOS
+     })
+     
+     
+     #Tabla final de estilos asignadados por linea de produccion
      output$tabla_asignacion <- DT::renderDataTable({
           reporte <- reporte.final()
           if(is.null(reporte.final)) return(NULL)
@@ -69,6 +176,8 @@ shinyServer(function(input, output, session) {
           selectInput("dataset", "Filtrar por linea de produccion", as.list(l.linea))
      })
      
+     
+     #escala diferente para cada grafico
      free.scale.fin <- reactive({
           b.scales = "fixed"
           if (input$same.scale.fin){
@@ -78,7 +187,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #grafico por linea, dependen del combobox cual mostrar
+     #muestra la asigancion por linea (usa combobox para filtrar)
      output$plot.por.linea <- renderPlotly({
           reporte <- reporte.final()
           if(is.null(reporte)) return(NULL)
@@ -100,7 +209,7 @@ shinyServer(function(input, output, session) {
           )
      })
      
-     #ANALISIS FINAL
+     #Tabla de estilos asignados a cada familia
      output$total.fam <- renderTable({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -112,16 +221,7 @@ shinyServer(function(input, output, session) {
           }
      })
      
-     #tabla outliers (pendiente)
-     output$outliers <- renderTable({
-          reporte <- reporte.final()
-          if(is.null(reporte)) {
-               return(NULL)
-          } else {
-               
-          }
-     })
-     
+     #calcula la mejora por asignacion de estilos a lineas de produccion
      output$mejora <- renderTable({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -145,6 +245,7 @@ shinyServer(function(input, output, session) {
           
      })
      
+     #tabla final de desviaciones por linea
      output$desviaciones <- DT::renderDataTable({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -164,7 +265,7 @@ shinyServer(function(input, output, session) {
           }
      })
      
-     #personal por linea
+     #personal por linea (se quita de este reporte)
      output$Porlinea <- DT::renderDataTable({
           temp <- reporte.final()
           if(is.null(temp)) return(NULL)
@@ -182,7 +283,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #personal por puesto
+     #personal por puesto (se quita de este reporte)
      output$total_puesto <- renderTable({
           temp <- reporte.final()
           if(is.null(temp)) return(NULL)
@@ -201,7 +302,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #personal total por puesto
+     #personal total por puesto (se quita de este reporte)
      output$Totales <- renderTable({
           temp <- reporte.final()
           if(is.null(temp)) return(NULL)
@@ -219,7 +320,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #gran total
+     #total de personas requeridas (se quita para utilizar version de analisis)
      output$grantotal <- renderPrint({
           temp <- reporte.final()
           if(is.null(temp)) return(NULL)
@@ -237,6 +338,7 @@ shinyServer(function(input, output, session) {
           cat(sum(tabla.totales[,2]))
      })
      
+     #grafico final de la asignacion, muestra graficamente la asignacion por puesto
      output$grafico.final <- renderPlotly({
           reporte <- reporte.final()
           if(is.null(reporte)) {
@@ -261,10 +363,9 @@ shinyServer(function(input, output, session) {
           
      })
      
-
+     #crear la asignacion por kmean de las lineas
      reporte.final <- reactive({
           
-          #HASTA QUE NO SE SELECCIONE UN ARCHIVO
           tabla.raw <- leer.archivo()
           if(is.null(tabla.raw)) return(NULL)
           
@@ -285,7 +386,8 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #TABLA COMPLETA DE ESTILOS Y TIEMPOS
+     
+     #tabla incial de lo leido
      output$tabla_completa <- DT::renderDataTable({
           tabla.raw <- leer.archivo()
           if(is.null(tabla.raw)) return(NULL)
@@ -293,7 +395,7 @@ shinyServer(function(input, output, session) {
           DT::datatable(tabla.raw, options = list(pageLength = 10))
      })
      
-     #GRAFICO DE CLUSTERS
+     #grafico de dendograma
      dendograma <- reactive({
           
           #leer tabla
@@ -309,6 +411,7 @@ shinyServer(function(input, output, session) {
           return(clust)
      })
      
+     #diferente escala en cada grafico
      free.scale.ini <- reactive({
           b.scales = "fixed"
           if (input$same.scale.ini){
@@ -330,7 +433,7 @@ shinyServer(function(input, output, session) {
           return(g + abline(h = input$altura_cluster, col="red"))
      })
      
-     #escribe el n?mero de lineas que se crean en cada altura
+     #escribe el numero de lineas que se crean en cada altura
      output$lineas <- renderText({
           arbol <- dendograma()
           if(is.null(arbol)) return(NULL)
@@ -357,7 +460,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     #GRAFICO INICIAL
+     #grafico de desviaciones por puesto
      output$graficoinicial <- renderPlotly({
           b.scales <- free.scale.ini()
           
@@ -383,7 +486,8 @@ shinyServer(function(input, output, session) {
                ggtitle("Tiempo (segundos) para producir un par")
           )
      })
-     #GRAFICO INICIAL
+     
+     #boxplot para ver desviacion entre los modelos
      output$boxplotini <- renderPlotly({
           
           #leer tabla
