@@ -2,7 +2,9 @@
 title: "Catalogo de estilos por familia"
 author: "Luis Espinosa Bouvy"
 date: "8 de noviembre de 2016"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 <style type="text/css">
 .table {

@@ -7,11 +7,7 @@ shinyUI(fluidPage(
      titlePanel("Crear lineas de produccion y asignar modelos"),
      sidebarLayout(
           sidebarPanel(
-               h4("Te invitamos a que definas tus lineas de produccion utilizando los datos de tu empresa."),
-               h5("El archivo debe tener un formato de columnas como se muestra en la figura.  Tus datos 
-                  pueden tener 3 o mas puestos o tipos de operador"),
-               img(src= "http://www.magro.com.mx/images/formato.PNG", align = "left",
-                   width = 200),
+               h4("Guarda el reporte de tiempos de estilos habilitados con CSV"),
                fileInput("browse", "Selecciona archivo CSV",
                          accept = c(
                               "text/csv",
@@ -19,6 +15,9 @@ shinyUI(fluidPage(
                               ".csv")
                ),
                checkboxInput("header", "Datos tienen encabezado", TRUE),
+               checkboxInput("personas", "Convertir tiempos a personas (100 prs/hr)", FALSE),
+               uiOutput("depto.select"),  #nuevo
+               uiOutput("lineas.select"),  #nuevo
                downloadButton("download","Descargar asignacion")
           ),
           mainPanel(
@@ -27,10 +26,12 @@ shinyUI(fluidPage(
                #    luis@magro.com.mx para ayudarte"),
                h5("Si tienes alguna duda de como funciona esta app, puedes enviarnos un correo a 
                   luis@magro.com.mx para ayudarte o puedes ver el articulo que explica su funcion y 
-                  funcionamiento en http://www.magro.com.mx/index.php/news/7-lineasprodcalzado"),
+                  funcionamiento en", a("nuestros articulos", href = "http://www.magro.com.mx/index.php/news/7-lineasprodcalzado")),
                tabsetPanel(
-                    tabPanel("Datos leidos",DT::dataTableOutput("tabla_completa")),
-                    tabPanel("Estadistica", 
+                    tabPanel("Datos leidos",
+                             DT::dataTableOutput("tabla_completa")
+                             ),
+                    tabPanel("Estadistica inicial", 
                              tableOutput("tablainicial"),
                              plotlyOutput("boxplotini"),
                              checkboxInput("same.scale.ini", "Usar escala independiente en cada grafico", FALSE),
@@ -43,30 +44,19 @@ shinyUI(fluidPage(
                              column(6,
                                     p("Lineas de produccion a crear: "),
                                     verbatimTextOutput("lineas")),
-                             plotOutput("dendograma", height = "600px")),
+                             plotOutput("dendograma", height = "800px")),
                     tabPanel("Modelos asignados", DT::dataTableOutput("tabla_asignacion",
                                                                       width = 400)),
                     tabPanel("Analisis Final y Medicion de mejora", 
-                             tableOutput("mejora"),
-                             tableOutput("total.fam"),
-                             plotlyOutput("grafico.final", height = "1500px"),
+                             column(6, h4("Analisis de los tiempos por puesto"),
+                                    tableOutput("mejora")),
+                             column(6, h4("Estilos asignados por linea"),
+                                    tableOutput("total.fam")),
+                             column(12,plotlyOutput("grafico.final", height = "1500px")),
                              uiOutput("seleccion_linea"),
                              checkboxInput("same.scale.fin", "Usar escala independiente en cada grafico", FALSE),
                              plotlyOutput("plot.por.linea", height = "600px"),
-                             DT::dataTableOutput("desviaciones", width = 200)),
-                    tabPanel("Personal Requerido",
-                             column(4,sliderInput("horas.trabajo", "Horas trabajadas por dia",
-                                         min = 1, max = 12, step = 0.5, value = 9.5)),
-                             column(4,sliderInput("eficiencia", "Eficiencia de balanceo",
-                                         min=10, max = 130, step = 5, value = 85)),
-                             column(4,sliderInput("pares.hora","Pares a producir por dia",
-                                         min=100, max = 10000, step = 50, value = 4000)),
-                             column(3,tableOutput("Totales")),
-                             column(3,tableOutput("total_puesto")),
-                             column(2, p("Total personas requeridas"),
-                                    verbatimTextOutput("grantotal")),
-                             DT::dataTableOutput("Porlinea",width = 400)
-                             )
+                             DT::dataTableOutput("desviaciones", width = 200))
                )
           )
      )

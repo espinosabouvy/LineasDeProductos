@@ -1,0 +1,11 @@
+name: Lineasdeproductos
+title: Lineasdeproductos
+account: perugia
+server: shinyapps.io
+appId: 154339
+bundleId: 767256
+url: https://perugia.shinyapps.io/Lineasdeproductos/
+when: 1490719738.37665
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: FUNCIONES_ESTILOS_HABILITADOS.csv|Imprimir_familias.html|Imprimir_familias.Rmd|lineasdeproduccion.R|Modelos asignados por linea.csv|tabla.JPG|Tiempos en columnas.csv|ui.html
