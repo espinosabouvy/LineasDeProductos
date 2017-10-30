@@ -13,41 +13,89 @@ shinyServer(function(input, output, session) {
      #reset para graficos, lo requiere plotly
      pdf(NULL)
      
+     #bandera para cargar parametros
+     file.guardardo = FALSE
+     
      #tabla vacia para cargar pares por linea
-     tb.porproduc <- reactiveValues()
      tb.porproduc <- data.frame("Linea" = numeric(0), "Pares" = numeric(0))
      
+     output$cargar.archivo <- renderUI({
+          if (input$origen == 1) {
+               fileInput("browse", "Selecciona archivo CSV ",
+                         accept = c(
+                              "text/csv",
+                              "text/comma-separated-values,text/plain",
+                              ".csv",
+                              ".Rdata")
+               ) 
+          }  else {
+               choices <- c("Simulaciones disponibles", 
+                            list.files(pattern="*.Rdata"))
+               selectInput("archivo.sim","Selecciona una simulacion", choices,
+                         multiple = F)
+          }
+     })
      
-     #lectura inicial de datos y transformacin al formato requerido de estilo-puesto1-puesto2
+     lectura.params <- reactive({
+          require(dplyr)
+          require(tidyr)
+          
+          if (input$origen==1) return(NULL)
+          
+          #si no se ha seleccionado simulacion
+          if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
+          
+          #regresa la tabla original de tiempos
+          load(input$archivo.sim)
+          return(parametros)
+     })
+     
+     #lectura inicial de datos desde archivo y transformacion al formato requerido de estilo-puesto1-puesto2
      lectura.inicial <- reactive({
           require(dplyr)
           require(tidyr)
           
-          inFile <- NULL
-          inFile <- input$browse          
-          if (is.null(inFile)){
-               #sin archivo seleccionado
-               return(NULL)
+          if (input$origen==1){  #por archivo
+               inFile <- NULL
+               inFile <- input$browse          
+               if (is.null(inFile))return(NULL)
+     
+               myClasses <- c(Estilo = "factor")
+               
+               #leer por tipo de archivo
+               tiempos.raw <- read.csv(inFile$datapath, stringsAsFactors = F, na.strings = " -   ",
+                                       colClasses = myClasses)
+      
+               tiempos <- tiempos.raw%>%
+                    select("PLANTA" = Planta, "STATUS" = Status, "DEPTO" = Departamento, 
+                           "ESTILO" = Estilo, "LINEA" = Unidad,
+                           "FUNCION" = Puesto, "TIEMPO" = Tiempos )
+               
+               return(tiempos)   
+          } else {  #por simulacion guardada
+               
+               #si no se ha seleccionado simulacion
+               if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
+               #regresa la tabla original de tiempos
+               load(input$archivo.sim)
+               return(datos)
           }
+     })
+     
+     observeEvent(input$guardar,{
+          archivos = c("datos","parametros")
           
-          myClasses <- c(Estilo = "factor")
-          
-          #leer por tipo de archivo
-          tiempos.raw <- read.csv(inFile$datapath, stringsAsFactors = F, na.strings = " -   ",
-                                  colClasses = myClasses)
-          
-          tiempos <- tiempos.raw%>%
-               select("PLANTA" = Planta, "STATUS" = Status, "DEPTO" = Departamento, 
-                      "ESTILO" = Estilo, "LINEA" = Unidad,
-                      "FUNCION" = Puesto, "TIEMPO" = Tiempos )
-          
-          return(tiempos)
+          datos <- lectura.inicial()
+          parametros <- reactiveValuesToList(input)
+          save(list = "datos",file = paste0("Simulacion","-",Sys.Date(),".Rdata"))
+          showNotification("Simulacion guardada", duration = 3)
      })
      
      #filtrar status, planta, unidades, depto
      #llenar combo de status con el archivo preparado
      output$status.select <- renderUI({
           datos <- lectura.inicial()
+          parametros <- lectura.params()
           
           if (is.null(datos)){
                #sin archivo seleccionado
@@ -57,11 +105,22 @@ shinyServer(function(input, output, session) {
           status <- unique(datos%>%select(STATUS))
           selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
                       multiple = T)
+          
+          #cargar seleccion de simulacion
+          if(exists("parametros")){
+               selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
+                           multiple = T, selected = parametros$status.selected)
+          } else {
+               selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
+                           multiple = T)
+          }
      })
      
      #llenar combo de planta de produccion
      output$planta.select <- renderUI({
           datos <- lectura.inicial()
+          parametros <- lectura.params()
+          
           if (is.null(datos)){
                #sin archivo seleccionado
                return(NULL)
@@ -71,44 +130,22 @@ shinyServer(function(input, output, session) {
           
           #solo las plantas que aparezcan en el status
           plantas <- unique(datos%>%filter(STATUS %in% input$status.selected)%>%select(PLANTA))
-          selectInput("plantas.selected", "Filtra las plantas que quieres analizar", as.list(plantas),
-                      multiple = TRUE)
-     })
-     
-     #escoger archivo a cargar
-     output$cargar <- renderUI({
-          choices <- list.files(pattern="*.RData")
-          selectInput("input_pares", "Utilizar archivo guardado", choices)
-     })
-     
-     # Load an RData file and update input
-     observeEvent(input$input_pares, {
-          #si hay archivo default
-          if (input$input_pares != "") {
-               load(input$input_pares)
-               tb.porproduc <<- tabla.pares.file
-               
-               #escribe la tabla
-               output$por.producir <- DT::renderDataTable({
-                    DT::datatable(tb.porproduc, options = list(dom = 't'))
-               })  
-          }
-     })
-     
-     #guardar archivo con pares por linea
-     observeEvent(input$guardar.pares, {
           
-          #save(tb.porproduc, file = paste0("/srv/shiny-server/rossetti/analisis/","Paresporlinea","-",fecha))
-          tabla.pares.file <- tb.porproduc
-          save(tabla.pares.file, file = paste0("Pares","-",Sys.Date(),".RData"))
-          choices <- list.files(pattern="*.RData")
-          updateSelectInput(session, "input_pares", choices=choices)
-          showNotification("Informacion guardada",duration = 3)
+          if(exists("parametros")){
+               selectInput("plantas.selected", "Filtra las plantas que quieres analizar", as.list(plantas),
+                      multiple = TRUE, selected = parametros$plantas.selected)
+          } else {
+               selectInput("plantas.selected", "Filtra las plantas que quieres analizar", as.list(plantas),
+                           multiple = TRUE)
+          }
+          
+          
      })
      
      #llenar combo de lineas ya asignadas, por si solo se quiere hacer el ejercicio con alguna linea
      output$lineas.select <- renderUI({
           datos <- lectura.inicial()
+          parametros <- lectura.params()
           
           if (is.null(datos)) return(NULL)
           
@@ -116,9 +153,17 @@ shinyServer(function(input, output, session) {
           if (is.null(input$plantas.selected)) return(NULL)
           
           lineas <<- unique(datos%>%filter(PLANTA %in% input$plantas.selected & 
-                                                STATUS %in% input$status.selected)%>%select(LINEA))%>%arrange()
-          selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
-                      multiple = TRUE)
+                                               STATUS %in% input$status.selected)%>%select(LINEA))%>%arrange()
+               
+          if(exists("parametros")){
+               selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
+                           multiple = TRUE, selected = parametros$lineas.selected)
+          } else {
+               selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
+                           multiple = TRUE)
+          }
+          
+
      })
      
      #checkbox seleccionar todos
@@ -147,6 +192,7 @@ shinyServer(function(input, output, session) {
      #llenar combo de departamentos con el archivo preparado
      output$depto.select <- renderUI({
           datos <- lectura.inicial()
+          parametros <- lectura.params()
           
           if (is.null(datos)){
                #sin archivo seleccionado
@@ -161,8 +207,24 @@ shinyServer(function(input, output, session) {
           deptos <- unique(datos%>%filter(PLANTA %in% input$plantas.selected & 
                                                STATUS %in% input$status.selected & 
                                                LINEA %in% input$lineas.selected)%>%select(DEPTO))
-          selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
-                      multiple = T)
+          if(exists("parametros")){
+               selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
+                           multiple = T, selected = parametros$depto.selected)
+               
+               #orden de actualizacion de parametros
+               orden <- c(3,10,12,13,15,19,21,23,25,30,31,32,33)
+               for (i in orden) {
+                    para <- names(parametros[i])
+                    valor <- parametros[i]
+                    session$sendInputMessage(names(parametros[i]),
+                                             list(value=parametros[i]))
+               }
+               
+          } else {
+               selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
+                           multiple = T)
+          }
+          
      })
      
      
@@ -195,7 +257,7 @@ shinyServer(function(input, output, session) {
           }
           
           
-          
+
           #convertir NAS en cero
           datos[is.na(datos)] <- 0
           
@@ -207,7 +269,7 @@ shinyServer(function(input, output, session) {
           #en los tiempos, aún cuando es correcto, puede generar información rara y depender
           #demasiado de la forma en que se cargan los tiempos en sistema, por ejemplo, si es
           #o no una secuencia o si agrupan funciones
-          
+        
           #agrega con cero las funciones, filtra linea y familias(si existen)
           #suma los tiempos redondeados en segundos
           temp <- datos%>%
@@ -247,7 +309,7 @@ shinyServer(function(input, output, session) {
           return(datos2)
           
      }
-     
+
      
      #Datos leidos - tabla de estilos y tiempos
      output$tabla_completa <- DT::renderDataTable({
@@ -264,25 +326,24 @@ shinyServer(function(input, output, session) {
      output$lineas.pares <- renderUI({
           num.fam <- reporte.final()
           if(is.null(num.fam)) return(NULL)
-          
+
           if(is.null(input$status.selected)) return(NULL)
           if(is.null(input$plantas.selected)) return(NULL)
           if(is.null(input$lineas.selected)) return(NULL)
-          
-          
+
+
           # num.fam <- num.fam%>%
           #      filter(STATUS %in% input$status.selected &
           #                  PLANTA %in% input$plantas.selected &
           #                  LINEA %in% input$lineas.selected)
           l.linea <- unique(num.fam$LINEA)%>%sort()
-          
+
           selectInput("linea.seleccionada", "Unidad", as.list(l.linea))
      })
      
      
      #General - crea la tabla de pares por producir por linea
-     observeEvent(input$agregar, {
-          
+     actualiza <- eventReactive(input$agregar, {
           #agregar a la tabla los pares
           l.linea <- input$linea.seleccionada
           pares <- as.numeric(input$pares)
@@ -291,18 +352,16 @@ shinyServer(function(input, output, session) {
           
           #quita la linea que existe (actualizar)
           tb.porproduc <- tb.porproduc%>%filter(LINEA != l.linea)
-          tb.porproduc <- rbind(tb.porproduc, temp)%>%
+          tb.porproduc <<- rbind(tb.porproduc, temp)%>%
                arrange(LINEA)
-          
-          tb.porproduc <<- tb.porproduc
-          #General - imprime tabla de pares por producir
-          output$por.producir <- DT::renderDataTable({
-               DT::datatable(tb.porproduc, options = list(dom = 't'))
-          })     
      })
      
-     
-     
+     #General - imprime tabla de pares por producir
+     output$por.producir <- DT::renderDataTable({
+
+          tabla <- actualiza()               
+          DT::datatable(tabla, options = list(dom = 't'))
+     })
      
      
      # General - Drop-down de linea a filtrar
@@ -312,27 +371,6 @@ shinyServer(function(input, output, session) {
           l.linea <- unique(num.fam$LINEA)%>%sort()
           selectInput("dataset", "Filtrar por unidad de produccion", as.list(l.linea))
      })   
-     
-     output$dendo.familias.ui <- renderPlot({
-          reporte <- reporte.final(personas.sin = FALSE)
-          if(is.null(reporte)) return(NULL)
-          
-          fin <- dim(reporte)[2]
-          tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(3:fin))
-          familias <- tabla.renglon%>%
-               group_by(LINEA,PUESTO)%>%
-               summarise("TIEMPO" = sum(TIEMPO))%>%
-               spread(PUESTO, TIEMPO)
-          
-          distancias <- dist(familias[,-1], method = "euclidian")
-          clust <- hclust(distancias)
-          
-          slabs <- as.character(familias$LINEA)
-          g <- plot(clust, labels = slabs, axes = T, main = "Cluster de agrupamiento",
-                    xlab = "Modelos", ylab = "Indice de desviacion")
-          dev.off()
-          return(g)
-     })
      
      #grafico que crece según la cantidad de datos --------------------
      output$grafico.inicial.ui <- renderUI({
@@ -422,7 +460,7 @@ shinyServer(function(input, output, session) {
           
      })
      
-     
+
      #Desviaciones - grafico por linea, dependen del combobox cual mostrar
      obtener.criticos <- reactive({
           reporte <- reporte.final(personas.sin = FALSE)
@@ -456,8 +494,8 @@ shinyServer(function(input, output, session) {
                select(ESTILO, CRITICO)
           
           for.plot <- merge(temp, critico, by = "ESTILO")%>%
-               mutate("DESVIACION" = ifelse(CRITICO == "CRITICO", "CRITICO",
-                                            ifelse(TIEMPO < Q1 | TIEMPO > Q4,"FUERA","NORMAL")))
+                      mutate("DESVIACION" = ifelse(CRITICO == "CRITICO", "CRITICO",
+                                                   ifelse(TIEMPO < Q1 | TIEMPO > Q4,"FUERA","NORMAL")))
      })
      
      #Desviaciones - Imprimir los estilos criticos segun el slider de porcentaje en los limites
@@ -505,7 +543,7 @@ shinyServer(function(input, output, session) {
                ggtitle("Estilos a producir vs tiempo total de proceso por funcion") + 
                theme(axis.text.x = element_text(angle = 90, hjust = 1, size=6))
           g <- ggplotly(p, tooltip = c("x", "text"))         
-          dev.off()
+               dev.off()
           g
      })
      
@@ -527,7 +565,7 @@ shinyServer(function(input, output, session) {
           if (is.null(tabla)) return(NULL)
           
           colnames(tabla)[2] <- ifelse(input$personas, "Personas", "Tiempo")
-          
+               
           return(tabla)
      })
      
@@ -536,23 +574,23 @@ shinyServer(function(input, output, session) {
           reporte <- reporte.final(personas.sin = FALSE)
           if(is.null(reporte)) return(NULL)
           
-          #indicador de desviacion (promedio/(max-min))
-          #crea tabla de 3 columnas ESTILO, PUESTO, TIEMPO
-          fin <- dim(reporte)[2]
-          tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(3:fin))
-          
-          indicador <- tabla.renglon%>%
-               group_by(LINEA, PUESTO)%>%
-               summarise("Prom" = ceiling(mean(TIEMPO)),
-                         "Mini" = min(TIEMPO) ,
-                         "Maxi" = max(TIEMPO))%>%
-               group_by(LINEA)%>%
-               summarise("Promedio" = sum(Prom),
-                         "Minimo" = sum(Mini),
-                         "Maximo" = sum(Maxi),
-                         "Porcentaje desv." = round((Maximo-Minimo)/Promedio*100,2))
-          return(indicador)
-          
+               #indicador de desviacion (promedio/(max-min))
+               #crea tabla de 3 columnas ESTILO, PUESTO, TIEMPO
+               fin <- dim(reporte)[2]
+               tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(3:fin))
+               
+               indicador <- tabla.renglon%>%
+                    group_by(LINEA, PUESTO)%>%
+                    summarise("Prom" = ceiling(mean(TIEMPO)),
+                              "Mini" = min(TIEMPO) ,
+                              "Maxi" = max(TIEMPO))%>%
+                    group_by(LINEA)%>%
+                    summarise("Promedio" = sum(Prom),
+                              "Minimo" = sum(Mini),
+                              "Maximo" = sum(Maxi),
+                              "Porcentaje desv." = round((Maximo-Minimo)/Promedio*100,2))
+               return(indicador)
+
      })
      
      #Desviaciones - Imprimir valor de porcentaje de mejora
@@ -567,7 +605,7 @@ shinyServer(function(input, output, session) {
                filter(LINEA == input$dataset)
           
           cat(as.numeric(100-round(mejora$NvaDesviacion/ant[5]*100,2)))
-          
+     
      })
      
      #Desviaciones - Imprimir valor de desviacion mejorada
@@ -592,27 +630,27 @@ shinyServer(function(input, output, session) {
           
           cat(as.numeric(incr))
      })
-     
+
      
      #Desviaciones - indicador general de desviacion sin criticos
      desviacion.mejorada <- reactive({
           
           reporte <- obtener.criticos()
           if(is.null(reporte)) return(NULL)
-          
-          mejora <- reporte%>%
-               filter(CRITICO != "CRITICO")%>%
-               select(ESTILO, LINEA, PUESTO, TIEMPO)%>%
-               group_by(LINEA, PUESTO)%>%
-               summarise("Prom" = ceiling(mean(TIEMPO)),
-                         "Mini" = min(TIEMPO) ,
-                         "Maxi" = max(TIEMPO))%>%
-               group_by(LINEA)%>%
-               summarise("Promedio" = sum(Prom),
-                         "Minimo" = sum(Mini),
-                         "Maximo" = sum(Maxi),
-                         "NvaDesviacion" = round((Maximo-Minimo)/Promedio*100,2))
-          return(mejora)
+
+               mejora <- reporte%>%
+                    filter(CRITICO != "CRITICO")%>%
+                    select(ESTILO, LINEA, PUESTO, TIEMPO)%>%
+                    group_by(LINEA, PUESTO)%>%
+                    summarise("Prom" = ceiling(mean(TIEMPO)),
+                              "Mini" = min(TIEMPO) ,
+                              "Maxi" = max(TIEMPO))%>%
+                    group_by(LINEA)%>%
+                    summarise("Promedio" = sum(Prom),
+                              "Minimo" = sum(Mini),
+                              "Maximo" = sum(Maxi),
+                              "NvaDesviacion" = round((Maximo-Minimo)/Promedio*100,2))
+               return(mejora)
      })
      
      #Desviaciones - tabla de desviaciones por linea
@@ -620,18 +658,18 @@ shinyServer(function(input, output, session) {
           reporte <- reporte.final(personas.sin = FALSE)
           if(is.null(reporte)) return(NULL)
           
-          #crea tabla de 3 columnas ESTILO, PUESTO, TIEMPO
-          fin <- dim(reporte)[2]
-          tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(3:fin))
-          
-          desviaciones <- tabla.renglon%>%
-               group_by(LINEA, PUESTO)%>%
-               summarise("Promedio" = ceiling(mean(TIEMPO)),
-                         "Desviacion" = round(sd(TIEMPO),2),
-                         "Minimo" = min(TIEMPO) ,
-                         "Maximo" = max(TIEMPO))
-          DT::datatable(desviaciones, options = list(pageLength = 50))
-          
+               #crea tabla de 3 columnas ESTILO, PUESTO, TIEMPO
+               fin <- dim(reporte)[2]
+               tabla.renglon <- gather(reporte, "PUESTO","TIEMPO",c(3:fin))
+               
+               desviaciones <- tabla.renglon%>%
+                    group_by(LINEA, PUESTO)%>%
+                    summarise("Promedio" = ceiling(mean(TIEMPO)),
+                              "Desviacion" = round(sd(TIEMPO),2),
+                              "Minimo" = min(TIEMPO) ,
+                              "Maximo" = max(TIEMPO))
+               DT::datatable(desviaciones, options = list(pageLength = 50))
+
      })
      
      #Flujo continuo -  Drop-down linea para revisar flujo
@@ -647,8 +685,8 @@ shinyServer(function(input, output, session) {
           
           datos.fin <- datos%>%
                filter(STATUS %in% input$status.selected,
-                      PLANTA %in% input$plantas.selected, 
-                      LINEA %in% input$lineas.selected)
+                           PLANTA %in% input$plantas.selected, 
+                           LINEA %in% input$lineas.selected)
           
           lineas <- unique(datos.fin$LINEA)%>%sort()
           selectInput("cb.lineas.flujo", "Selecciona una unidad", as.list(lineas),
@@ -696,7 +734,7 @@ shinyServer(function(input, output, session) {
           #escoge uno o mas deptos y uno o mas estilos (una sola linea)
           if (is.null(input$cb.deptos.flujo)) return(NULL)
           if (is.null(input$cb.estilos.flujo)) return(NULL)
-          
+
           #convertir NAS en cero
           datos[is.na(datos)] <- 0
           
@@ -706,7 +744,7 @@ shinyServer(function(input, output, session) {
           
           #si se tiene el dato de demanda, lo hace con la demanda
           if (nrow(tb.porproduc%>%
-                   filter(LINEA %in% input$cb.lineas.flujo))==0){
+                           filter(LINEA %in% input$cb.lineas.flujo))==0){
                datos$PARES <- 1000
                temp <- datos
           } else {
@@ -716,7 +754,7 @@ shinyServer(function(input, output, session) {
           temp$PERSONAS <- ceiling(temp$TIEMPO*60*temp$PARES/(efic*hrs*3600))
           
           datos <- temp
-          
+
           #agrega con cero las funciones, filtra linea y familias(si existen)
           temp <- datos%>%
                filter(STATUS %in% input$status.selected & 
@@ -743,55 +781,55 @@ shinyServer(function(input, output, session) {
      #Flujo continuo - metas y cumplimiento por depto
      full.flujo <- reactive({
           
-          datos <- reporte.flujo()
-          if(is.null(datos)) return(NULL)
-          
-          estilos = input$cb.estilos.flujo
-          #cuantos estilos seleccionados
-          cuantos <- length(input$cb.estilos.flujo)
-          
-          if (cuantos == 0) return(NULL)
-          if (length(input$cb.lineas.flujo) == 0) return(NULL)
-          
-          #solo los estilos seleccionados
-          datos <- datos%>%
-               filter(ESTILO %in% estilos)
-          
-          #si no hay pares por producir por linea utilizar 100 pares por hora
-          #if(nrow(tb.porproduc)==0) return(NULL)
-          
-          #acumular meta de los estilos seleccionados si es mas de uno
-          if (cuantos > 1){
-               tabla.plot <- datos%>%
-                    group_by(DEPTO, FUNCION)%>%
-                    summarise("PERSONAS" = ceiling(sum(PERSONAS)/cuantos),
-                              "PLANTILLA" = min(sum(PLANTILLA)/cuantos),
-                              "Pct.meta" = ifelse(PERSONAS == 0, 
-                                                  ceiling(300), 
-                                                  ceiling((PLANTILLA/(PERSONAS))*100)))%>%
-                    mutate("ESTILO" = "AGRUPADO")
-          } else {
+               datos <- reporte.flujo()
+               if(is.null(datos)) return(NULL)
                
-               tabla.plot <- datos%>%
-                    mutate("Pct.meta" = ifelse(PERSONAS == 0, 
-                                               300, 
-                                               ceiling((PLANTILLA/PERSONAS)*100)))
-          }
-          
-          plot.final <- tabla.plot%>%
-               arrange(DEPTO, FUNCION, Pct.meta)%>%
-               mutate("DEPTOFUNC" = paste(DEPTO,"/",FUNCION),
-                      "EFIC" = round(min(Pct.meta)/Pct.meta*100,0),
-                      "DIF" = PERSONAS - PLANTILLA)
-          
-          return(plot.final)
-          
+               estilos = input$cb.estilos.flujo
+               #cuantos estilos seleccionados
+               cuantos <- length(input$cb.estilos.flujo)
+               
+               if (cuantos == 0) return(NULL)
+               if (length(input$cb.lineas.flujo) == 0) return(NULL)
+               
+               #solo los estilos seleccionados
+               datos <- datos%>%
+                    filter(ESTILO %in% estilos)
+               
+               #si no hay pares por producir por linea utilizar 100 pares por hora
+               #if(nrow(tb.porproduc)==0) return(NULL)
+               
+               #acumular meta de los estilos seleccionados si es mas de uno
+               if (cuantos > 1){
+                    tabla.plot <- datos%>%
+                         group_by(DEPTO, FUNCION)%>%
+                         summarise("PERSONAS" = ceiling(sum(PERSONAS)/cuantos),
+                                   "PLANTILLA" = min(sum(PLANTILLA)/cuantos),
+                                   "Pct.meta" = ifelse(PERSONAS == 0, 
+                                                       ceiling(300), 
+                                                       ceiling((PLANTILLA/(PERSONAS))*100)))%>%
+                         mutate("ESTILO" = "AGRUPADO")
+               } else {
+                    
+                    tabla.plot <- datos%>%
+                         mutate("Pct.meta" = ifelse(PERSONAS == 0, 
+                                                    300, 
+                                                    ceiling((PLANTILLA/PERSONAS)*100)))
+               }
+               
+               plot.final <- tabla.plot%>%
+                    arrange(DEPTO, FUNCION, Pct.meta)%>%
+                    mutate("DEPTOFUNC" = paste(DEPTO,"/",FUNCION),
+                           "EFIC" = round(min(Pct.meta)/Pct.meta*100,0),
+                           "DIF" = PERSONAS - PLANTILLA)
+               
+               return(plot.final)
+               
      })
-     
+
      #Flujo continuo - tabla del grafico (pendiente si presentar o no)
      output$tabla.plot <- DT::renderDataTable({
           plot.final <- full.flujo()
-          
+
           if (is.null(plot.final))  return(NULL)
           
           plot.final <- plot.final%>%
@@ -837,10 +875,10 @@ shinyServer(function(input, output, session) {
           if (is.infinite(cumplimiento)) return(NULL)
           
           #buscar cumplimineto y eficiencia mayor al 90 o 10 iteraciones
-          iter = 0
+               iter = 0
           
           movimientos <- data.frame("Origen" = numeric(0),"Destino" = numeric(0))
-          
+
           while((cumplimiento < input$cumple.min | eficiencia < .9) & iter < input$cambios.max){
                dona <- min(plot.final$DIF)
                recibe <- min(plot.final$Pct.meta)
@@ -853,7 +891,7 @@ shinyServer(function(input, output, session) {
                funciondona <- head(plot.final[plot.final$DIF == dona,]$FUNCION,1)
                
                #if (dona >= 0) break
-               
+     
                #en el minimo, quien recibe +1, quien dona -1
                nva.plantilla.mas <- plot.final[plot.final$FUNCION == funcionrecibe,]$PLANTILLA + 1
                nva.plantilla.menos <- plot.final[plot.final$FUNCION == funciondona,]$PLANTILLA - 1
@@ -1039,7 +1077,7 @@ shinyServer(function(input, output, session) {
                incr <- round((1-(mejora$Maximo/anterior%>%
                                       filter(LINEA == input$dataset)%>%
                                       select(Maximo)))*100,2)
-               
+
                l.actual <- input$dataset
                par.fam <- tb.porproduc%>%
                     filter(LINEA == l.actual)%>%
@@ -1048,7 +1086,7 @@ shinyServer(function(input, output, session) {
                if (nrow(par.fam)==0) return(cat("Sin pares por producir"))
                
                mas.fact <- as.numeric(ceiling((par.fam * (incr/100) * as.numeric(input$precio.prom))*5))
-               
+
                cat(format(mas.fact, decimal.mark=".",big.mark=",", small.mark=",", small.interval=3))
           })
           
@@ -1073,7 +1111,7 @@ shinyServer(function(input, output, session) {
                #                "PARES" = min(PARES),
                #                "PERSONAS" = ifelse(n()==1,PERSONAS,ceiling(mean(PERSONAS+(sds*sd(PERSONAS))))))
                
-               #prueba sin redondear personas
+                    #prueba sin redondear personas
                tabla.renglon <- gather(temp, "PUESTO","TIEMPO",c(3:fin))%>%
                     merge(tb.porproduc, by = "LINEA")%>%
                     mutate("PERSONAS" = ceiling(TIEMPO*PARES/(efic*hrs*3600)))%>%
@@ -1091,14 +1129,14 @@ shinyServer(function(input, output, session) {
           output$PersonalPorlinea <- DT::renderDataTable({
                tabla.renglon <- calcular.plantilla()
                if (is.null(tabla.renglon)) return(NULL)
-               
+          
                DT::datatable(tabla.renglon, class = 'cell-border stripe' ,
                              options = list(pageLength = 50),
                              selection = 'multiple', rownames = FALSE)
                
           })
           
-          
+
           #Analisis de personal - plantilla basica, Calcula restriccion y eficiencia por funcion
           eficiencia.funcion <- reactive({
                temp <<- reporte.final()
@@ -1111,7 +1149,7 @@ shinyServer(function(input, output, session) {
                efic <- input$eficiencia/100
                hrs <- input$horas.trabajo
                sds <- input$sds
-               
+          
                #primero convierte a personas y luego redondea
                plantilla <- gather(temp, "PUESTO","TIEMPO",c(3:fin))%>%
                     merge(tb.porproduc, by = "LINEA")%>%
@@ -1121,8 +1159,8 @@ shinyServer(function(input, output, session) {
                               "PARES" = min(PARES),
                               "PLANTILLA" = ifelse(n()==1,PERSONAS,ceiling(mean(PERSONAS+(sds*sd(PERSONAS))))))%>%
                     select(LINEA, PUESTO, PARES, PLANTILLA)
-               
-               
+
+  
                
                tabla.renglon <- gather(temp, "PUESTO","TIEMPO",c(3:fin))%>%
                     merge(plantilla, by = c("LINEA","PUESTO"))%>%
@@ -1134,12 +1172,12 @@ shinyServer(function(input, output, session) {
                meta.estilo <- tabla.renglon%>%
                     group_by(ESTILO)%>%
                     summarise("PROD.RESTRICCION" = min(CAPACIDAD.FUNCION))
-               
+                    
                result <- merge(tabla.renglon, meta.estilo, by = "ESTILO")%>%
                     mutate("EFICIENCIA" =ceiling(ifelse(PERSONAS==0,0, PROD.RESTRICCION/PARES.PRODUCCION*100)),
                            "APROVECHAMIENTO" = round(ifelse(PERSONAS==0,0, EFICIENCIA/100*PLANTILLA),2)) 
                
-               
+
                return(result)
           })
           
@@ -1178,7 +1216,7 @@ shinyServer(function(input, output, session) {
                                                    ifelse(PORCENTAJE > 50, "B-REGULAR","C-CRITICO")),
                                             ifelse(PORCENTAJE >= 95, "A-BUENO", 
                                                    ifelse(PORCENTAJE >= 90, "B-REGULAR","C-CRITICO"))))
-               
+
                paleta <- c("darkgreen","gold2","red")
                
                g <- ggplotly(
@@ -1190,7 +1228,7 @@ shinyServer(function(input, output, session) {
                          ylab("EFICIENCIA/ CUMPLIMIENTO DE METAS") +
                          xlab("") +
                          theme(axis.text.x = element_text(angle = 90, hjust = 1, size=6))
-                    
+               
                )
                dev.off()
                g
@@ -1258,7 +1296,7 @@ shinyServer(function(input, output, session) {
                            "CUMPLE META(%)" = CUMPLIMIENTO, "DESVIACION PARES" = DESVIACION)
                
           })
-          
+
           
           #Analisis de personal - Imprime personas por funcion
           output$total_puesto <- renderTable({
@@ -1285,7 +1323,7 @@ shinyServer(function(input, output, session) {
                #calcula produccion promedio real por la eficiencia de balanceo
                efic <- eficiencia.funcion()
                if(is.null(efic)) return(NULL)
-               
+
                prod.prom <- efic%>%
                     group_by(LINEA)%>%
                     summarise("PROD.REAL" = ceiling(mean(PROD.RESTRICCION)))
@@ -1319,7 +1357,7 @@ shinyServer(function(input, output, session) {
                     summarise("PROD.REAL" = ceiling(mean(PROD.RESTRICCION)))
                
                total.pares <- sum(prod.prom$PROD.REAL)
-               
+
                result <- merge(tabla.renglon, prod.prom, by = "LINEA")%>%
                     mutate("COSTO.PAR" = round((sueldo*PERSONAS)/(PROD.REAL*5),2),
                            "PRECIO.POND" = COSTO.PAR*PROD.REAL)
@@ -1372,7 +1410,7 @@ shinyServer(function(input, output, session) {
                     summarise("PROD.REAL" = ceiling(mean(PROD.RESTRICCION)))
                
                total.pares <- sum(prod.prom$PROD.REAL)
-               
+
                cat(format(total.pares*5*input$precio.prom - costo.mo, decimal.mark=".",big.mark=",", small.mark=",", small.interval=3))
                
           })
