@@ -15,36 +15,37 @@ shinyUI(fluidPage(
                # tags$style(type="text/css", ".well { max-width: 300px; }")
                # ),
                conditionalPanel(condition= "input.conditionedPanels != 'Analisis de personal'",
-                    radioButtons("origen", "Selecciona",
-                                 choices = list("Nuevos datos" = 1,
-                                                         "Cargar simulacion" = 2)),
-                    uiOutput("cargar.archivo"),   #archivo o simulacion
-                    actionButton("guardar","Guardar..."), #guardar simulacion
-                    uiOutput("status.select"), #selecionar status
-                    uiOutput("planta.select"), #seleccionar planta
-                    uiOutput("chk.todos.lineas"), #seleccionar todas las lineas
-                    uiOutput("lineas.select"),  #seleccionar lineas
-                    uiOutput("depto.select"),  #seleccionar depto
-                    checkboxInput("agrupado", "Agrupar en una sola unidad de produccion", FALSE),
-                    checkboxInput("personas", "Convertir tiempos a personas", TRUE),
-                    uiOutput("prs.personas.ui"),   #pares a personas personalizado
-                    h3("Configuracion general"),
-                    sliderInput("horas.trabajo", "Horas trabajadas por dia",   #horas trabajo por dia
-                                min = 1, max = 24, step = 0.1, value = 9.6),
-                    sliderInput("eficiencia", "Eficiencia de balanceo/programacion",   #eficiencia de balanceo
-                                min=10, max = 130, step = 5, value = 85),
-                    sliderInput("precio.prom", "Truput promedio por par",  #truput promedio
-                                min = 50, max = 500, step = 10, value = 300),   
-                    sliderInput("sueldo.prom", "Sueldo semanal promedio",    #sueldo promedio
-                                min = 500, max = 3000, step = 100, value = 1400),  
-                    sliderInput("sl.graficos","Escalar altura de graficos",0.5,1.5,1,0.1)   #escalar graficos
+                                radioButtons("origen", "Selecciona",
+                                             choices = list("Nuevos datos" = 1,
+                                                            "Cargar simulacion" = 2)),
+                                uiOutput("cargar.archivo"),   #archivo o simulacion
+                                actionButton("guardar","Guardar"), #guardar simulacion
+                                actionButton("eliminar","Eliminar"), #eliminar simulacion
+                                uiOutput("status.select"), #selecionar status
+                                uiOutput("planta.select"), #seleccionar planta
+                                uiOutput("chk.todos.lineas"), #seleccionar todas las lineas
+                                uiOutput("lineas.select"),  #seleccionar lineas
+                                uiOutput("depto.select"),  #seleccionar depto
+                                checkboxInput("agrupado", "Agrupar en una sola unidad de produccion", FALSE),
+                                checkboxInput("personas", "Convertir tiempos a personas", TRUE),
+                                uiOutput("prs.personas.ui"),   #pares a personas personalizado
+                                h3("Configuracion general"),
+                                sliderInput("horas.trabajo", "Horas trabajadas por dia",   #horas trabajo por dia
+                                            min = 1, max = 24, step = 0.1, value = 9.6),
+                                sliderInput("eficiencia", "Eficiencia de balanceo/programacion",   #eficiencia de balanceo
+                                            min=10, max = 130, step = 5, value = 85),
+                                sliderInput("precio.prom", "Truput promedio por par",  #truput promedio
+                                            min = 50, max = 500, step = 10, value = 300),   
+                                sliderInput("sueldo.prom", "Sueldo semanal promedio",    #sueldo promedio
+                                            min = 500, max = 3000, step = 100, value = 1400),  
+                                sliderInput("sl.graficos","Escalar altura de graficos",0.5,1.5,1,0.1)   #escalar graficos
                ),
                conditionalPanel(condition= "input.conditionedPanels == 'Analisis de personal'",
-                    h3("Pares por producir por dia por unidad"),
-                    uiOutput("lineas.pares"),
-                    textInput("pares","Pares"),
-                    actionButton("agregar","Agregar..."),
-                    DT::dataTableOutput("por.producir")
+                                h3("Pares por producir por dia por unidad"),
+                                uiOutput("lineas.pares"),
+                                textInput("pares","Pares"),
+                                actionButton("agregar","Agregar..."),
+                                DT::dataTableOutput("por.producir")
                ),
                width = 3
           ),
@@ -97,7 +98,7 @@ shinyUI(fluidPage(
                                 de cada uno de ellos"),
                              h4("3. El incremento en la produccion y facturacion considera producir el estilo
                                 seleccionado durante una semana")
-                    ),
+                             ),
                     tabPanel("Analisis de asignacion", 
                              column(4,tableOutput("total.fam")),
                              column(12, p("Los siguientes graficos permiten entender la forma en que estan
@@ -107,7 +108,7 @@ shinyUI(fluidPage(
                              checkboxInput("same.scale.inicial", 
                                            "Usar escala independiente en cada grafico", FALSE),
                              column(12,uiOutput("grafico.inicial.ui"))
-
+                             
                              ),                    
                     tabPanel("Analisis de desviaciones",
                              column(4,uiOutput("seleccion_linea")),
@@ -121,16 +122,16 @@ shinyUI(fluidPage(
                                     verbatimTextOutput("incr.produccion"),
                                     h4("Incremento en TRUPUT semanal (pesos)"),
                                     verbatimTextOutput("inc.facturacion")
-                                    ),
+                             ),
                              column(3, h5("Mayores causantes de desviacion"),
                                     tableOutput("cancelar.criticos")),
                              column(6, h5("Indicadores de desviacion global de la unidad"),
                                     tableOutput("indicador.desviacion")),
                              checkboxInput("same.scale.fin", 
-                                                    "Usar escala independiente en cada grafico", FALSE),
+                                           "Usar escala independiente en cada grafico", FALSE),
                              column(12,plotlyOutput("plot.por.linea", height = "800px")),
                              DT::dataTableOutput("desviaciones", width = 200)
-                         ),
+                    ),
                     tabPanel("Analisis de personal",
                              column(3, sliderInput("sds","Desviaciones estandar arriba del promedio",
                                                    min=0,max = 3, step = 0.1, value = 0),
@@ -192,7 +193,7 @@ shinyUI(fluidPage(
                                     DT::dataTableOutput("balanceo"))
                     ),
                     id = "conditionedPanels"
-               )
-          )
-     )
-))
+                    )
+                    )
+                             )
+                             ))
