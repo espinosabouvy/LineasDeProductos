@@ -4,7 +4,7 @@ library(plotly)
 
 shinyUI(fluidPage(
      
-     titlePanel("Diagnostico, analisis y mejoras de lineas de produccion - CARLO ROSSETTI 2017"),
+     titlePanel("Diagnostico, analisis y mejoras de lineas de produccion - MAGRO V5.0 2017"),
      #titlePanel("Diagnostico, analisis y mejoras de lineas de produccion - PERUGIA"),
      sidebarLayout(
           sidebarPanel(
@@ -14,41 +14,45 @@ shinyUI(fluidPage(
                # tags$style(type="text/css", ".span4 { max-width: 190px; }"),
                # tags$style(type="text/css", ".well { max-width: 300px; }")
                # ),
-               radioButtons("origen", "Selecciona",
-                            choices = list("Nuevos datos" = 1,
-                                                    "Cargar simulacion" = 2)),
-               uiOutput("cargar.archivo"),   #archivo o simulacion
-               actionButton("guardar","Guardar..."), #guardar simulacion
-               uiOutput("status.select"), #selecionar status
-               uiOutput("planta.select"), #seleccionar planta
-               uiOutput("lineas.select"),  #seleccionar lineas
-               uiOutput("chk.todos.lineas"), #seleccionar todas las lineas
-               uiOutput("depto.select"),  #seleccionar depto
-               checkboxInput("agrupado", "Agrupar en una sola unidad de produccion", FALSE),
-               checkboxInput("personas", "Convertir tiempos a personas", TRUE),
-               uiOutput("prs.personas.ui"),   #pares a personas personalizado
-               h3("Configuracion general"),
-               sliderInput("horas.trabajo", "Horas trabajadas por dia",   #horas trabajo por dia
-                           min = 1, max = 24, step = 0.1, value = 9.6),
-               sliderInput("eficiencia", "Eficiencia de balanceo/programacion",   #eficiencia de balanceo
-                           min=10, max = 130, step = 5, value = 85),
-               sliderInput("precio.prom", "Truput promedio por par",  #truput promedio
-                           min = 50, max = 500, step = 10, value = 300),   
-               sliderInput("sueldo.prom", "Sueldo semanal promedio",    #sueldo promedio
-                           min = 500, max = 3000, step = 100, value = 1400),  
-               sliderInput("sl.graficos","Escalar altura de graficos",0.5,1.5,1,0.1),   #escalar graficos
-               h3("Pares por producir por dia por unidad"),
-               uiOutput("lineas.pares"),
-               textInput("pares","Pares"),
-               actionButton("agregar","Agregar..."),
-               DT::dataTableOutput("por.producir"),
+               conditionalPanel(condition= "input.conditionedPanels != 'Analisis de personal'",
+                    radioButtons("origen", "Selecciona",
+                                 choices = list("Nuevos datos" = 1,
+                                                         "Cargar simulacion" = 2)),
+                    uiOutput("cargar.archivo"),   #archivo o simulacion
+                    actionButton("guardar","Guardar..."), #guardar simulacion
+                    uiOutput("status.select"), #selecionar status
+                    uiOutput("planta.select"), #seleccionar planta
+                    uiOutput("chk.todos.lineas"), #seleccionar todas las lineas
+                    uiOutput("lineas.select"),  #seleccionar lineas
+                    uiOutput("depto.select"),  #seleccionar depto
+                    checkboxInput("agrupado", "Agrupar en una sola unidad de produccion", FALSE),
+                    checkboxInput("personas", "Convertir tiempos a personas", TRUE),
+                    uiOutput("prs.personas.ui"),   #pares a personas personalizado
+                    h3("Configuracion general"),
+                    sliderInput("horas.trabajo", "Horas trabajadas por dia",   #horas trabajo por dia
+                                min = 1, max = 24, step = 0.1, value = 9.6),
+                    sliderInput("eficiencia", "Eficiencia de balanceo/programacion",   #eficiencia de balanceo
+                                min=10, max = 130, step = 5, value = 85),
+                    sliderInput("precio.prom", "Truput promedio por par",  #truput promedio
+                                min = 50, max = 500, step = 10, value = 300),   
+                    sliderInput("sueldo.prom", "Sueldo semanal promedio",    #sueldo promedio
+                                min = 500, max = 3000, step = 100, value = 1400),  
+                    sliderInput("sl.graficos","Escalar altura de graficos",0.5,1.5,1,0.1)   #escalar graficos
+               ),
+               conditionalPanel(condition= "input.conditionedPanels == 'Analisis de personal'",
+                    h3("Pares por producir por dia por unidad"),
+                    uiOutput("lineas.pares"),
+                    textInput("pares","Pares"),
+                    actionButton("agregar","Agregar..."),
+                    DT::dataTableOutput("por.producir")
+               ),
                width = 3
           ),
           mainPanel(
                h5("Si tienes alguna duda de como funciona esta app, puedes enviarnos un correo a 
                   admin@magro.com.mx para ayudarte. Vrs-Ros5.0"),
                tabsetPanel(
-                    tabPanel("Datos leidos",
+                    tabPanel("Datos Leidos",
                              DT::dataTableOutput("tabla_completa")),
                     tabPanel("Calculos",
                              h2("Definicion de calculos"),
@@ -186,7 +190,8 @@ shinyUI(fluidPage(
                                     DT::dataTableOutput("tabla.plot")),
                              column(12, h4("Tabla de datos balanceada"),
                                     DT::dataTableOutput("balanceo"))
-                    )
+                    ),
+                    id = "conditionedPanels"
                )
           )
      )

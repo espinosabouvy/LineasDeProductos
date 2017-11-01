@@ -18,6 +18,9 @@ shinyServer(function(input, output, session) {
      
      #tabla vacia para cargar pares por linea
      tb.porproduc <- data.frame("Linea" = numeric(0), "Pares" = numeric(0))
+     parametros <- NULL
+     #ruta <<- "/var/shiny-server/www/shiny-test/saved/"  #server
+     ruta <- ""  #local
      
      output$cargar.archivo <- renderUI({
           if (input$origen == 1) {
@@ -29,25 +32,82 @@ shinyServer(function(input, output, session) {
                               ".Rdata")
                ) 
           }  else {
+               #para cuando se usa local y en server
+               if (ruta==""){
                choices <- c("Simulaciones disponibles", 
-                            list.files(pattern="*.Rdata"))
+                            list.files(pattern="*Rdata"))
+               } else {
+                    choices <- c("Simulaciones disponibles",
+                                 list.files(path = ruta, pattern="*Rdata"))
+               }
                selectInput("archivo.sim","Selecciona una simulacion", choices,
                          multiple = F)
           }
      })
      
-     lectura.params <- reactive({
-          require(dplyr)
-          require(tidyr)
+     observeEvent(input$guardar,{
+          archivos <- c("datos","parametros", "tb.porproduc", "reporte.final.magro")
           
+          datos <- lectura.inicial()
+          parametros <- reactiveValuesToList(input)
+          reporte.final.magro <- reporte.final()
+          
+          deptos <<- paste0(input$depto.selected, collapse = "-")
+          unidades <- paste0(input$lineas.selected, collapse = "-")
+          save(list = archivos , file = paste0(ruta, deptos,"--",unidades,"--","(",Sys.Date(),")",".Rdata"),
+               precheck = TRUE)
+          showNotification("Simulacion guardada", duration = 3)
+     })  
+     
+     lectura.params <- reactive({
+          if (input$origen==1) return(NULL)
+
+          #si no se ha seleccionado simulacion
+          if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
+          
+          #regresa la tabla original de tiempos
+          load(paste0(ruta, input$archivo.sim))
+          
+          return(parametros)
+     })
+     
+     lectura.pares.unidad <- reactive({
           if (input$origen==1) return(NULL)
           
           #si no se ha seleccionado simulacion
           if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
           
           #regresa la tabla original de tiempos
-          load(input$archivo.sim)
-          return(parametros)
+          load(paste0(ruta, input$archivo.sim))
+          
+          return(tb.porproduc)
+     })
+     
+     observeEvent(input$archivo.sim,{
+          parametros <<- lectura.params()
+          tb.porproduc <<- lectura.pares.unidad()
+          
+          #si no se ha seleccionado simulacion
+          if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
+          
+          if (is.null(parametros)){}else{
+          
+               #orden de actualizacion de parametros
+               updateCheckboxInput(session, "personas",value = parametros$personas)
+               updateSliderInput(session, "pares.personas",value = parametros$pares.personas)
+               updateCheckboxInput(session, "agrupado",value = parametros$agrupado)
+               updateSliderInput(session, "horas.trabajo",value = parametros$horas.trabajo)
+               updateSliderInput(session, "sueldo.prom",value = parametros$sueldo.prom)
+               updateSliderInput(session, "horas.trabajo",value = parametros$horas.trabajo)
+               updateSliderInput(session, "eficiencia",value = parametros$eficiencia)
+               updateSliderInput(session, "precio.prom",value = parametros$precio.prom)
+               updateSliderInput(session, "sl.graficos",value = parametros$sl.graficos)
+               
+               #General - imprime tabla de pares por producir
+               output$por.producir <- DT::renderDataTable({
+                    DT::datatable(tb.porproduc, options = list(dom = 't'))
+               })
+          }
      })
      
      #lectura inicial de datos desde archivo y transformacion al formato requerido de estilo-puesto1-puesto2
@@ -77,25 +137,17 @@ shinyServer(function(input, output, session) {
                #si no se ha seleccionado simulacion
                if (input$archivo.sim == "Simulaciones disponibles") return(NULL)
                #regresa la tabla original de tiempos
-               load(input$archivo.sim)
+               load(paste0(ruta, input$archivo.sim))
                return(datos)
           }
      })
      
-     observeEvent(input$guardar,{
-          archivos = c("datos","parametros")
-          
-          datos <- lectura.inicial()
-          parametros <- reactiveValuesToList(input)
-          save(list = "datos",file = paste0("Simulacion","-",Sys.Date(),".Rdata"))
-          showNotification("Simulacion guardada", duration = 3)
-     })
+
      
      #filtrar status, planta, unidades, depto
      #llenar combo de status con el archivo preparado
      output$status.select <- renderUI({
           datos <- lectura.inicial()
-          parametros <- lectura.params()
           
           if (is.null(datos)){
                #sin archivo seleccionado
@@ -107,19 +159,18 @@ shinyServer(function(input, output, session) {
                       multiple = T)
           
           #cargar seleccion de simulacion
-          if(exists("parametros")){
-               selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
-                           multiple = T, selected = parametros$status.selected)
-          } else {
+          if(is.null("parametros")){
                selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
                            multiple = T)
+          } else {
+               selectInput("status.selected", "Selecciona los status que quieres analizar", as.list(status),
+                           multiple = T, selected = parametros$status.selected)
           }
      })
      
      #llenar combo de planta de produccion
      output$planta.select <- renderUI({
           datos <- lectura.inicial()
-          parametros <- lectura.params()
           
           if (is.null(datos)){
                #sin archivo seleccionado
@@ -131,12 +182,12 @@ shinyServer(function(input, output, session) {
           #solo las plantas que aparezcan en el status
           plantas <- unique(datos%>%filter(STATUS %in% input$status.selected)%>%select(PLANTA))
           
-          if(exists("parametros")){
+          if(is.null("parametros")){
                selectInput("plantas.selected", "Filtra las plantas que quieres analizar", as.list(plantas),
-                      multiple = TRUE, selected = parametros$plantas.selected)
+                      multiple = TRUE)
           } else {
                selectInput("plantas.selected", "Filtra las plantas que quieres analizar", as.list(plantas),
-                           multiple = TRUE)
+                           multiple = TRUE, selected = parametros$plantas.selected)
           }
           
           
@@ -145,7 +196,6 @@ shinyServer(function(input, output, session) {
      #llenar combo de lineas ya asignadas, por si solo se quiere hacer el ejercicio con alguna linea
      output$lineas.select <- renderUI({
           datos <- lectura.inicial()
-          parametros <- lectura.params()
           
           if (is.null(datos)) return(NULL)
           
@@ -155,12 +205,12 @@ shinyServer(function(input, output, session) {
           lineas <<- unique(datos%>%filter(PLANTA %in% input$plantas.selected & 
                                                STATUS %in% input$status.selected)%>%select(LINEA))%>%arrange()
                
-          if(exists("parametros")){
-               selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
-                           multiple = TRUE, selected = parametros$lineas.selected)
-          } else {
+          if(is.null("parametros")){
                selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
                            multiple = TRUE)
+          } else {
+               selectInput("lineas.selected", "Filtra las unidades que quieres analizar", as.list(lineas),
+                           multiple = TRUE, selected = parametros$lineas.selected)
           }
           
 
@@ -175,24 +225,20 @@ shinyServer(function(input, output, session) {
           if (is.null(input$status.selected)) return(NULL)
           if (is.null(input$plantas.selected)) return(NULL)
           
-          checkboxInput("todas.lineas", "Seleccionar todas las lineas")
+          actionLink("todas.lineas", "Seleccionar todas las unidades disponibles")
      })
      
      #seleccionar todas las lineas
      observeEvent(input$todas.lineas,{
-          if (input$todas.lineas){
-               if (length(lineas)==0) return(NULL)
-               updateSelectInput(session, "lineas.selected", selected = lineas$LINEA)
-          } else {
-               updateSelectInput(session, "lineas.selected", selected = character(0))
-          }
-          
+
+          if (length(lineas)==0) return(NULL)
+          updateSelectInput(session, "lineas.selected", selected = lineas$LINEA)
+
      })
      
      #llenar combo de departamentos con el archivo preparado
      output$depto.select <- renderUI({
           datos <- lectura.inicial()
-          parametros <- lectura.params()
           
           if (is.null(datos)){
                #sin archivo seleccionado
@@ -206,25 +252,17 @@ shinyServer(function(input, output, session) {
           
           deptos <- unique(datos%>%filter(PLANTA %in% input$plantas.selected & 
                                                STATUS %in% input$status.selected & 
-                                               LINEA %in% input$lineas.selected)%>%select(DEPTO))
-          if(exists("parametros")){
-               selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
-                           multiple = T, selected = parametros$depto.selected)
-               
-               #orden de actualizacion de parametros
-               orden <- c(3,10,12,13,15,19,21,23,25,30,31,32,33)
-               for (i in orden) {
-                    para <- names(parametros[i])
-                    valor <- parametros[i]
-                    session$sendInputMessage(names(parametros[i]),
-                                             list(value=parametros[i]))
-               }
-               
-          } else {
+                                               LINEA %in% input$lineas.selected)%>%
+                                select(DEPTO))
+          
+          if(is.null(parametros)){
                selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
                            multiple = T)
+
+          } else {
+               selectInput("depto.selected", "Selecciona los departamento que quieres analizar", as.list(deptos),
+                           multiple = T, selected = parametros$depto.selected)
           }
-          
      })
      
      
@@ -256,8 +294,6 @@ shinyServer(function(input, output, session) {
                nombre.depto <- input$depto.selected
           }
           
-          
-
           #convertir NAS en cero
           datos[is.na(datos)] <- 0
           
@@ -304,9 +340,9 @@ shinyServer(function(input, output, session) {
           datos[is.na(datos)] <- 0
           
           #dejar solo las funciones que tienen suma de tiempos diferente de cero
-          datos2 <- datos[c(rep(TRUE, 2L), colSums(datos[3L:ncol(datos)]) > 0)]
+          reporte.final.magro <- datos[c(rep(TRUE, 2L), colSums(datos[3L:ncol(datos)]) > 0)]
           
-          return(datos2)
+          return(reporte.final.magro)
           
      }
 
@@ -343,26 +379,27 @@ shinyServer(function(input, output, session) {
      
      
      #General - crea la tabla de pares por producir por linea
-     actualiza <- eventReactive(input$agregar, {
-          #agregar a la tabla los pares
-          l.linea <- input$linea.seleccionada
-          pares <- as.numeric(input$pares)
+    observeEvent(input$agregar, {
+          #se presiona sin datos
+         if (input$pares=="") return(NULL)
+               #agregar a la tabla los pares
+               l.linea <- input$linea.seleccionada
+               pares <- as.numeric(input$pares)
+               
+               temp <- data.frame("LINEA" = l.linea, "PARES" = pares)
+               
+               #quita la linea que existe (actualizar)
+               tb.porproduc <- tb.porproduc%>%filter(LINEA != l.linea)
+               tb.porproduc <- rbind(tb.porproduc, temp)%>%
+                    arrange(LINEA)
           
-          temp <- data.frame("LINEA" = l.linea, "PARES" = pares)
-          
-          #quita la linea que existe (actualizar)
-          tb.porproduc <- tb.porproduc%>%filter(LINEA != l.linea)
-          tb.porproduc <<- rbind(tb.porproduc, temp)%>%
-               arrange(LINEA)
-     })
-     
-     #General - imprime tabla de pares por producir
-     output$por.producir <- DT::renderDataTable({
-
-          tabla <- actualiza()               
-          DT::datatable(tabla, options = list(dom = 't'))
-     })
-     
+               #General - imprime tabla de pares por producir
+               output$por.producir <- DT::renderDataTable({
+                    DT::datatable(tb.porproduc, options = list(dom = 't'))
+               })
+               
+               tb.porproduc <<- tb.porproduc
+    })
      
      # General - Drop-down de linea a filtrar
      output$seleccion_linea <- renderUI({
@@ -444,11 +481,11 @@ shinyServer(function(input, output, session) {
                      strip.text.y = element_text(size = 6),
                      legend.title=element_blank())
           #scale_colour_brewer(palette = "Set3")
-          ggplotly(g, tooltip = c("colour","x","text"))
-          
-          # dev.off()
+          g<- ggplotly(g, tooltip = c("colour","x"))
+          dev.off()
+          g
+
      })
-     
      
      #Desviaciones - escala independiente por grafico
      free.scale.fin <- reactive({
@@ -561,7 +598,7 @@ shinyServer(function(input, output, session) {
      
      #Desviaciones - indicador general de desviacion (imprimir)
      output$indicador.desviacion <- renderTable({
-          tabla <<- fun.indicador.desviacion()
+          tabla <- fun.indicador.desviacion()
           if (is.null(tabla)) return(NULL)
           
           colnames(tabla)[2] <- ifelse(input$personas, "Personas", "Tiempo")
@@ -1044,7 +1081,7 @@ shinyServer(function(input, output, session) {
                
                para.plot <- rbind(datos.normal, balanceado)
                
-               ggplot(para.plot, aes(DEPTOFUNC, Pct.meta, colour = Datos, group = Datos)) + 
+               g <- ggplot(para.plot, aes(DEPTOFUNC, Pct.meta, colour = Datos, group = Datos)) + 
                     geom_point(size = 2) + geom_line() + 
                     scale_x_discrete(labels = substr(para.plot$FUNCION,1,5)) +
                     geom_hline(data = intercepts, aes(yintercept =  Meta.real, colour = DEPTO))+
@@ -1053,7 +1090,8 @@ shinyServer(function(input, output, session) {
                     ggtitle("Porcentaje de cumplimiento de meta por funcion") + 
                     xlab("FUNCIONES") + 
                     ylab("CUMPLIMIENTO DE META")
-               
+               dev.off()
+               g
           })
           
      })
@@ -1061,7 +1099,11 @@ shinyServer(function(input, output, session) {
      
      #General - Oberva boton agregar y actualiza todo lo referente a analisis de personal
      #cuando se carga un meta de pares por linea
-     observeEvent(input$agregar, {
+     actualiza.pares <- reactive({
+          list(input$archivo.sim, input$agregar)
+     })
+     
+     observeEvent(actualiza.pares(), {
           
           #Analisis de desviaciones - incremento en facturacion quitando criticos
           output$inc.facturacion <- renderPrint({
@@ -1102,15 +1144,6 @@ shinyServer(function(input, output, session) {
                hrs <- input$horas.trabajo
                sds <- input$sds
                
-               
-               # tabla.renglon <- gather(temp, "PUESTO","TIEMPO",c(3:fin))%>%
-               #      merge(tb.porproduc, by = "LINEA")%>%
-               #      mutate("PERSONAS" = ceiling(TIEMPO*PARES/(efic*hrs*3600)))%>%
-               #      group_by(LINEA, PUESTO)%>%
-               #      summarise("TIEMPO" = ceiling(mean(TIEMPO)),
-               #                "PARES" = min(PARES),
-               #                "PERSONAS" = ifelse(n()==1,PERSONAS,ceiling(mean(PERSONAS+(sds*sd(PERSONAS))))))
-               
                     #prueba sin redondear personas
                tabla.renglon <- gather(temp, "PUESTO","TIEMPO",c(3:fin))%>%
                     merge(tb.porproduc, by = "LINEA")%>%
@@ -1139,7 +1172,7 @@ shinyServer(function(input, output, session) {
 
           #Analisis de personal - plantilla basica, Calcula restriccion y eficiencia por funcion
           eficiencia.funcion <- reactive({
-               temp <<- reporte.final()
+               temp <- reporte.final()
                if(is.null(temp)) return(NULL)
                
                #si no hay pares por producir por linea no hace el calculo
@@ -1240,7 +1273,7 @@ shinyServer(function(input, output, session) {
                if(is.null(temp)) return(NULL)
                
                #grafico de eficiencia
-               eficiencia.por.estilo <<- temp%>%
+               eficiencia.por.estilo <- temp%>%
                     group_by(ESTILO)%>%
                     summarise("DISPONIBLE" = sum(PLANTILLA),
                               "UTILIZADO" = sum(APROVECHAMIENTO),
@@ -1439,6 +1472,5 @@ shinyServer(function(input, output, session) {
                cat(round(sum(tabla.totales$PERSONAS)))
           })
      })
-     
-     
+ 
 })
